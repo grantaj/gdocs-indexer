@@ -1,49 +1,74 @@
-from googleapiclient.discovery import build
 from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import os
 import re
 
-# Step 1: Authenticate and set up the API client
-SCOPES = ['https://www.googleapis.com/auth/documents.readonly']
-SERVICE_ACCOUNT_FILE = 'credentials.json'
-DOCUMENT_ID = '1pZk2z4xjii-3xlew51eDNVyjOEGQZtcBy5ulLdxyhnk'
+# Authenticate and set up the Google Docs API client
+def authenticate():
+    SCOPES = ['https://www.googleapis.com/auth/documents.readonly']
+    creds = None
+    if os.path.exists('credentials.json'):
+        creds = service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+    else:
+        raise FileNotFoundError("Credentials file not found. Ensure you have 'credentials.json' in the working directory.")
 
-credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-service = build('docs', 'v1', credentials=credentials)
+    service = build('docs', 'v1', credentials=creds)
+    return service
 
-# Step 2: Retrieve document content
-def retrieve_document_content(doc_id):
-    document = service.documents().get(documentId=doc_id).execute()
-    return document
-
-# Step 3: Process content to generate an index
-def generate_index(content):
-    word_index = {}
-    current_page = 1
-    for element in content['body']['content']:
+# Download Google Docs content as plain text and handle page breaks
+def download_document(service, document_id):
+    document = service.documents().get(documentId=document_id).execute()
+    content = document.get('body').get('content')
+    text = ''
+    page_number = 0
+    page_texts = {page_number: ''}
+    
+    for element in content:
         if 'paragraph' in element:
             for elem in element['paragraph']['elements']:
                 if 'textRun' in elem:
-                    text = elem['textRun']['content']
-                    words = re.findall(r'\b\w+\b', text.lower())
-                    for word in words:
-                        if word not in word_index:
-                            word_index[word] = set()
-                        word_index[word].add(current_page)
-        elif 'sectionBreak' in element:
-            current_page += 1
+                    page_texts[page_number] += elem['textRun']['content']
+        if 'sectionBreak' in element:
+            page_number += 1
+            page_texts[page_number] = ''
+                    
+    return page_texts
+
+# Save the document content to a text file (optional)
+def save_to_text_file(content, file_path):
+    with open(file_path, 'w') as file:
+        file.write(content)
+
+# Generate index from the text content
+def generate_index(page_texts):
+    word_index = {}
+    for page_number, text in page_texts.items():
+        words = re.findall(r'\b\w+\b', text.lower())
+        for word in words:
+            if word not in word_index:
+                word_index[word] = []
+            word_index[word].append(page_number)
     return word_index
 
-# Step 4: Main function to put everything together
+# Main function to download document and generate index
 def main():
-    document = retrieve_document_content(DOCUMENT_ID)
-    content = document
-    index = generate_index(content)
-    sorted_index = {k: sorted(v) for k, v in sorted(index.items())}
+    DOCUMENT_ID = '1pZk2z4xjii-3xlew51eDNVyjOEGQZtcBy5ulLdxyhnk'
+    FILE_PATH = 'document.txt'
 
-    # Print or save the index
+    service = authenticate()
+    page_texts = download_document(service, DOCUMENT_ID)
+    
+    # Concatenate all pages' text for saving (optional)
+    content = '\n'.join(page_texts.values())
+    save_to_text_file(content, FILE_PATH)
+
+    index = generate_index(page_texts)
+    sorted_index = {k: sorted(set(v)) for k, v in sorted(index.items())}
+
+    # Print the index
     for word, pages in sorted_index.items():
         print(f'{word}: {", ".join(map(str, pages))}')
 
 if __name__ == '__main__':
     main()
+
