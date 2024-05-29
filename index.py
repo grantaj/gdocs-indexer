@@ -39,6 +39,12 @@ def save_to_text_file(content, file_path):
     with open(file_path, 'w') as file:
         file.write(content)
 
+# Save the index to a text file
+def save_index_to_file(index, file_path):
+    with open(file_path, 'w') as file:
+        for word, pages in index.items():
+            file.write(f'{word}: {", ".join(map(str, pages))}\n')
+            
 # Generate index from the text content
 def generate_index(page_texts):
     word_index = {}
@@ -52,15 +58,16 @@ def generate_index(page_texts):
 
 # Main function to download document and generate index
 def main():
-    DOCUMENT_ID = '1pZk2z4xjii-3xlew51eDNVyjOEGQZtcBy5ulLdxyhnk'
-    FILE_PATH = 'document.txt'
+    document_id = input("Please enter the Google Docs document ID: ")
+    text_file_path = 'document.txt'
+    index_file_path = 'index.txt'
 
     service = authenticate()
-    page_texts = download_document(service, DOCUMENT_ID)
+    page_texts = download_document(service, document_id)
     
     # Concatenate all pages' text for saving (optional)
     content = '\n'.join(page_texts.values())
-    save_to_text_file(content, FILE_PATH)
+    save_to_text_file(content, text_file_path)
 
     index = generate_index(page_texts)
     sorted_index = {k: sorted(set(v)) for k, v in sorted(index.items())}
@@ -68,6 +75,11 @@ def main():
     # Print the index
     for word, pages in sorted_index.items():
         print(f'{word}: {", ".join(map(str, pages))}')
+
+    # Save the index to a text file
+    save_index_to_file(sorted_index, index_file_path)
+
+    print(f'The index has been saved to {index_file_path}')
 
 if __name__ == '__main__':
     main()
